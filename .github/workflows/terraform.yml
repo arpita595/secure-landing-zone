@@ -1,0 +1,57 @@
+name: Terraform CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: envs/dev
+          framework: terraform
+          output_format: cli,json
+          output_file_path: console,checkov-report.json
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: envs/dev
+
+      - name: Upload scan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-report
+          path: envs/dev/checkov-report.json
+
+  terraform:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: envs/dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start LocalStack
+        uses: LocalStack/setup-localstack@v0.2.3
+        with:
+          image-tag: 'latest'
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init & Plan
+        run: |
+          terraform init
+          terraform plan -var="admin_ip_cidr=0.0.0.0/0" -out=tfplan
