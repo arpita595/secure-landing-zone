@@ -1,0 +1,5 @@
+directory:
+  - envs/dev
+framework:
+  - terraform
+soft-fail: false
